@@ -10,7 +10,7 @@ Args
 	- thick: thickness of lines
 	- N: number of lines
 	- mean/sigL: parameters of the length distribution
-	- sigD: variation of direction (Brownian motion) (rad.unit-1)
+	- sigD: variation of direction of random movement (rad.unit-1)
 Lengths measurement are in percent of image width
 """
 def crack(size, thick, N, meanL, sigD, sigL, seed = None, mode = "RGB"):
@@ -48,7 +48,7 @@ def crack(size, thick, N, meanL, sigD, sigL, seed = None, mode = "RGB"):
 
 		# Initialize noise for direction
 		noise = np.cumsum(np.random.normal(0., trueSigD, n))
-		print(noise[5])
+		#print(noise[5])
 		dirs += noise
 
 		# Vectorialize direction

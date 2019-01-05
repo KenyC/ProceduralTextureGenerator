@@ -14,4 +14,5 @@ def colorRamp(img, markers):
 	npArr = np.array(img)
 
 	for i, (posI, valI) in enumerate(markers[:-1]):
+		pass
 

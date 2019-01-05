@@ -33,7 +33,6 @@ def createUIforOP(op, dWidgets, name = None, prefix = "op"):
 	# Assign events on change
 
 	for key, val in dWidgets.items():
-		print(key)
 		val.observe(lambda change, n = name, k = key: update_val(n, k, change), names = "value")
-	# Careful: we need the "name" variable to be bound locally ; otherwise, future changes to "name" result in change of the event function itself!
+	# Careful: we need the "name" and "key" variable to be bound locally ; otherwise, future changes to "name" result in change of the event function itself!
 	# Hence the default parameter trick
