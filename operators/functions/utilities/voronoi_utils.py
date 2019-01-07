@@ -486,7 +486,7 @@ class VoronoiGraph:
 				print("DELETE ", selfEv.signature, "x=", selfEv.x)
 				print("List at delete")
 				for thing in list_nodes:
-					print(thing.value)
+					print(thing)
 				
 				
 
@@ -579,7 +579,7 @@ class VoronoiGraph:
 					print("INSERT", selfEv.focus.idx,"in", node.focus, "x=", selfEv.x)
 					print("List at insert")
 					for thing in list_nodes:
-						print(thing.value)
+						print(thing)
 					
 					# getting ref to position in list
 					pos = node.pos

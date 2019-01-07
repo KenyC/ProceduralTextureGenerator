@@ -15,7 +15,16 @@ class DoubleList:
 
 	def delete(self, nb = 1):
 		if nb == 1:
-			self.after.before = self.before
+			# Automatically sets "self.before" to have as next element "self.after"
+			if self.after is not None:
+				self.after.before = self.before
+			else:
+				self.before.after = self.after
+
+			# Unlinking
+			self.after = None
+			self.before = None
+
 			return self.after
 		else:
 			val = self
@@ -27,6 +36,7 @@ class DoubleList:
 	def append(self, value):
 		dl = DoubleList(value, self.after) # self.after now points to "dl"
 		self.after = dl # dl now points to self
+		return dl
 
 	# Inserts dl list after
 	def insert(self, value):
@@ -60,11 +70,14 @@ class DoubleList:
 	def __getitem__(self, idx):
 		if isinstance(idx, int):
 			toReturn = self
-			for toReturn, _ in zip(iter(self), range(idx + 1)):
+			for toReturn, _ in zip(self.LtoRIterator(), range(idx + 1)):
 				pass
 			return toReturn
 		else:
 			raise KeyError
+
+	def __len__(self):
+		return sum(1 for _ in self)
 
 	@property
 	def before(self):
@@ -101,10 +114,25 @@ class DoubleList:
 
 
 	def __iter__(self):
-		return self.LtoRIterator()
+		return (dl.value for dl in self.LtoRIterator())
 
 	def __str__(self):
-		return " <-> ".join([str(dl.value) for dl in self])
+		return " <-> ".join([str(dl) for dl in self])
+
+
+class StableFirst(DoubleList):
+
+	def __init__(self):
+		super(StableFirst, self).__init__(None)
+
+	def delete(self, n = 1):
+		raise Exception("Dummy beginning may not be deleted")
+
+	def __iter__(self):
+		if self.after is not None:
+			return iter(self.after)
+		else:
+			return iter(())
 
 
 if __name__ == "__main__":
@@ -122,7 +150,7 @@ if __name__ == "__main__":
 	test1[3].insert(test2)
 
 	for dl in test1:
-		print(dl.value)
+		print(dl)
 
 	# Ensure that references are well guarded
 	l = [[0], [52], [21]]
