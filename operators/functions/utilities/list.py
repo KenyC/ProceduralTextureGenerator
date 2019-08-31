@@ -22,10 +22,11 @@ class DoubleList:
 				self.before.after = self.after
 
 			# Unlinking
+			refToAfter = self.after
 			self.after = None
 			self.before = None
 
-			return self.after
+			return refToAfter
 		else:
 			val = self
 			for i in range(nb):
@@ -51,7 +52,12 @@ class DoubleList:
 	def before2(self):
 		return self.before.before
 	
-	
+	# Get values at index i
+	def get(self, i):
+		for j, v in enumerate(self):
+			if i == j:
+				return v
+		raise IndexError("index out of range") 
 
 	@property
 	def last(self):

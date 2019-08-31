@@ -1,4 +1,5 @@
 from queue import PriorityQueue
+from utilities.list import DoubleList
 import numpy as np
 from functools import reduce
 from PIL import Image, ImageDraw
@@ -116,6 +117,7 @@ class Pt:
 		else:
 			raise LookupError
 
+
 	def __eq__(self, other):
 		return self.idx == other.idx
 
@@ -168,9 +170,25 @@ class Edge:
 		return Edge(self.pt1, self.pt2, self.origin, (-self.dir[0], -self.dir[1]))
 
 
+	def intersect_with_boundary(self, other):
+
+		ptIntersect_t = self.intersect(other)
+		ptIntersect = np.array(ptIntersect_t).reshape((2,))
+		origSelf = np.array(self.origin).reshape((2,))
+		origOther = np.array(other.origin).reshape((2,))
+
+		if self.is_complete():
+			boundarySelf = np.array(self.boundary).reshape((2,))
+			if np.linalg.norm(ptIntersect - origSelf) > np.linalg.norm(boundarySelf - origSelf):
+				raise NoIntersectionBetweenRays
+
+		if self.is_complete():
+			boundaryOther = np.array(other.boundary).reshape((2,))
+			if np.linalg.norm(ptIntersect - origOther) > np.linalg.norm(boundaryOther - origOther):
+				raise NoIntersectionBetweenRays
 
 
-
+		return ptIntersect_t
 
 
 
@@ -179,11 +197,11 @@ class Edge:
 
 class SearchTree:
 
-	def __init__(self, parent = None, focus = None, children = []):
+	def __init__(self, parent = None, focus = None, children = [], pos = None):
 
 		self.focus = focus
 		
-		
+		self.pos = pos
 		
 		self.parent = parent
 		self.edge = None
@@ -191,10 +209,42 @@ class SearchTree:
 		self.children = children
 		self.delete  = []
 
+	def LRiterator(self):
+		first = self.leftmost
+		while first is not None:
+			yield first
+			first = first.next
+
+	def leftbranchIterator(self):
+		first = self
+		while not first.is_leaf():
+			yield first
+			first = first.leftChild
+		else:
+			yield first
+
+
+	def rightbranchIterator(self):
+		first = self
+		while not first.is_leaf():
+			yield first
+			first = first.rightChild
+		else:
+			yield first
+
+	
+
+
+	def __iter__(self):
+		return self.LRiterator()
 
 
 	def __str__(self):
 
+		# if self.is_leaf():
+		# 	return "[focus: {}]".format(self.focus)
+		# else:
+		# 	return "->".join([str(leaf) for leaf in self])
 
 		def str_rec(tree, n):
 			s = n*"\t" + "[parent: {}, focus: {}, edge: {}]\n".format(tree.parent is not None,
@@ -204,6 +254,15 @@ class SearchTree:
 				s += str_rec(child, n+1)
 
 			return s
+
+		# def str_rec(tree, n):
+		# 	s = n*"\t" + "[previous: {}, focus: {}, next: {}]\n".format(tree.previous.focus if tree.previous is not None else None,
+		# 													 tree.focus,
+		# 													 tree.next.focus  if tree.next is not None else None)
+		# 	for child in tree.children:
+		# 		s += str_rec(child, n+1)
+
+		# 	return s
 
 		return str_rec(self, 0)
 
@@ -220,9 +279,19 @@ class SearchTree:
 		
 	@children.setter
 	def children(self, value):
-		self._children = value
-		for child in self._children:
-			child.parent = self
+		
+		if len(value) == 0:
+			self._children = value
+			return
+		elif len(value) == 2:
+			self._children = value
+			self.leftChild = value[0]
+			self.rightChild = value[1]
+		else:
+			raise Exception("Non-binary tree modification")
+
+
+		
 
 	@property
 	def sister(self):
@@ -239,7 +308,10 @@ class SearchTree:
 	@leftChild.setter
 	def leftChild(self, value):
 		self.children[0] = value
+
+		#Setting new parent
 		value.parent = self
+		
 	
 	
 	@property
@@ -249,7 +321,10 @@ class SearchTree:
 	@rightChild.setter
 	def rightChild(self, value):
 		self.children[1] = value
+
+		#Setting new parent
 		value.parent = self
+		
 	
 	@property
 	def leftOf(self):
@@ -283,18 +358,20 @@ class SearchTree:
 		return self.rightSCA if self.is_right_child() else self.leftSCA
 
 	@property
-	def leftmost(self):
-		if self.is_leaf():
-			return self
-		else:
-			return self.leftChild.leftmost
+	def leftmost(self):		
+		item = self
+		for item in self.leftbranchIterator():
+			pass
+
+		return item
 	
 	@property
 	def rightmost(self):
-		if self.is_leaf():
-			return self
-		else:
-			return self.rightChild.rightmost
+		item = self
+		for item in self.rightbranchIterator():
+			pass
+
+		return item
 
 	@property
 	def root(self):
@@ -353,39 +430,42 @@ class VoronoiGraph:
 	def compute_graph(self):
 		queue = Queue()
 		tree = SearchTree(focus = Pt(0, self))
+		list_nodes = DoubleList(tree)
+		tree.pos = list_nodes
 
 		def check_circle(node, xCurrent):
-			try:
-				left = node.leftSCA
-				right = node.rightSCA
-			except LookupError:
+			left = node.pos.before
+			right = node.pos.after
+
+			if left is None or right is None:
 				return
-			else:
-				print("Checking {} and {}".format(left.edge, right.edge))
-				
-				try:
-					pt = x, y = left.edge.intersect(right.edge)
-				except NoIntersectionBetweenRays:
-					print("I swear I didn't find anything")
-					return
-				else:						
-					r = dist(node.focus, pt)
-					if x+r > xCurrent:
-						print("Will occur at x=", x+r)
-						#print("Points", node.focus, left.focus, right.focus)
-						#print(x,y,r)
-						# We store a reference to the delete event
-						# If any of these nodes were deleted before the delete event has to take place, 
-						# the event has to be disabled
-						deleteEvent = Delete(x+r, node)
-						deleteEvent.signature = "{} {} {}".format(node.leftOf.focus, node.focus, node.rightOf.focus)
-						
-						node.delete.append(deleteEvent)
-						# node.leftOf.delete.append(deleteEvent)
-						# node.rightOf.delete.append(deleteEvent)
-						queue.put(deleteEvent)
-					else:
-						print("I failed")
+
+
+			print("Checking {} and {}".format(left.value, right.value))
+			
+			try:
+				pt = x, y = left.value.intersect(right.value)
+			except NoIntersectionBetweenRays:
+				print("I swear I didn't find anything")
+				return
+			else:						
+				r = dist(node.focus, pt)
+				if x+r > xCurrent:
+					print("Will occur at x=", x+r)
+					#print("Points", node.focus, left.focus, right.focus)
+					#print(x,y,r)
+					# We store a reference to the delete event
+					# If any of these nodes were deleted before the delete event has to take place, 
+					# the event has to be disabled
+					deleteEvent = Delete(x+r, node)
+					deleteEvent.signature = "{} {} {}".format(node.pos.before2.value.focus, node.focus, node.pos.after2.value.focus)
+					
+					node.delete.append(deleteEvent)
+					# node.leftOf.delete.append(deleteEvent)
+					# node.rightOf.delete.append(deleteEvent)
+					queue.put(deleteEvent)
+				else:
+					print("I failed")
 				
 
 		class Event:
@@ -421,13 +501,16 @@ class VoronoiGraph:
 
 			def execute(selfEv):
 				print("DELETE ", selfEv.signature, "x=", selfEv.x)
-				print("Tree at DELETE", tree)
+				print("List at delete")
+				for thing in list_nodes:
+					print(thing)
 				
 				
 
 				# For adding boundary node to outcoming edge
-				right = selfEv.treeNode.rightOf
-				left = selfEv.treeNode.leftOf
+				right = selfEv.treeNode.pos.after2.value
+				left = selfEv.treeNode.pos.before2.value
+				assert(right is not None and left is not None)
 
 				print("#DISABLING#")
 				if left.setIdleDelete():
@@ -446,8 +529,8 @@ class VoronoiGraph:
 
 				# Adding boundaries to collapsing edges
 				try:
-					edge1 = selfEv.treeNode.leftSCA.edge
-					edge2 = selfEv.treeNode.rightSCA.edge
+					edge1 = selfEv.treeNode.pos.before.value
+					edge2 = selfEv.treeNode.pos.after.value
 					
 					intersect = edge1.intersect(edge2)
 
@@ -459,6 +542,8 @@ class VoronoiGraph:
 					raise AttributeError
 				except NoIntersectionBetweenRays:
 					raise Exception("why was DELETE ever called?")
+
+
 
 				# "treeNode"'s parent must be replaced with "treeNode"'s sister
 				parentReplace = selfEv.treeNode.parent.parent
@@ -479,6 +564,11 @@ class VoronoiGraph:
 				edge = Edge(focusLeft, focusRight, origin, dir1)
 				self.edges.append(edge)
 				sca.edge = edge
+				
+				# Maintain reference toprevious node
+				prevNode = selfEv.treeNode.pos.before2
+				prevNode.after.delete(3)
+				prevNode.append(edge)
 
 				# Add edge
 
@@ -504,12 +594,33 @@ class VoronoiGraph:
 					raise Exception("Multiple target found ; not implemented yet")
 				else:
 					print("INSERT", selfEv.focus.idx,"in", node.focus, "x=", selfEv.x)
+					print("List at insert")
+					for thing in list_nodes:
+						print(thing)
 					
+					# getting ref to position in list
+					pos = node.pos
+					assert(pos is not None)
+
 					# creating new right child of "node"
 					st = SearchTree(children = [SearchTree(focus = selfEv.focus), SearchTree(focus = node.focus)])
 
 					# Sprouting new children
-					node.children = [SearchTree(focus = node.focus), st]
+					node.children = [SearchTree(focus = node.focus, pos = pos), st]
+
+					# Augment list of node with inserted nodes
+					pos.value = node.leftChild
+					pos.append(st.rightChild)
+					pos.append(st.leftChild)
+
+					# Add references in trees
+					st.leftChild.pos = pos[1]
+					st.rightChild.pos = pos[2]
+
+
+
+					# Inner nodes have no position in list
+					node.pos = None
 
 					# Resetting delete events
 					print("#DISALING#")
@@ -531,6 +642,10 @@ class VoronoiGraph:
 
 					opEdge = edge.opposite()
 					st.edge = opEdge
+
+					# Add edges to pos
+					node.leftChild.pos.append(edge)
+					st.leftChild.pos.append(opEdge)
 
 					self.edges.append(opEdge)
 					self.edges.append(edge)
@@ -589,7 +704,7 @@ class VoronoiGraph:
 			else:
 				edge1, edge2 = t
 					
-				toAppend = Edge(*lexi(edge1), edge1.origin, edge1.dir)
+				toAppend = Edge(edge1.pt1, edge1.pt2, edge1.origin, edge1.dir)
 
 				if edge1.is_complete() and edge2.is_complete():
 					toAppend.origin = edge1.boundary
@@ -635,6 +750,8 @@ class VoronoiGraph:
 
 				draw.line([origin, endPt], width = thick, fill = (255,255,255))
 		return img
+
+	#def draw_cell(self, size, thick = 1, center = None)
 				
 
 
@@ -646,12 +763,31 @@ if __name__ == "__main__":
 	#a.intersect(b)
 
 	scale = 50
+	# testPts = [[5.80422285e+01, 9.70424354e+01],
+ #       [2.45994724e+02, 2.15062901e+02],
+ #       [8.91472245e+01, 2.20015415e+02],
+ #       [1.30929163e+02, 2.59899312e+02],
+ #       [2.33091249e+02, 2.32009340e+02],
+ #       [2.90028884e+02, 2.52980960e+02],
+ #       [1.70709103e+01, 1.01227005e+01],
+ #       [1.64920528e+02, 3.96799467e+00],
+ #       [2.48008720e+02, 1.75997180e+02],
+ #       [1.15334630e-02, 5.29805219e+01],
+ #       [6.60150582e+01, 2.67972627e+02],
+ #       [2.43987617e+02, 2.19658159e+01],
+ #       [2.83983344e+02, 1.75926724e+02],
+ #       [2.84097323e+02, 1.07987682e+02],
+ #       [1.47980174e+02, 2.82042400e+02],
+ #       [1.93032889e+02, 2.16995710e+02],
+ #       [2.04012869e+02, 2.50453043e+01],
+ #       [2.09052708e+02, 2.96915271e+02],
+ #       [1.87993088e+02, 8.20256878e+01],
+ #       [5.40024820e+01, 2.70968975e+02]]
 	testPts = [[ 43,  77],
        [262, 230],
        [298, 251],
        [161, 229],
-       [145,  95],
-       [239, 163]]
+       [145,  95]]
 	voronoi = VoronoiGraph(testPts)
 	print("############### AFTER COMPILING #########################")
 	for edge in voronoi.edges:
@@ -659,6 +795,7 @@ if __name__ == "__main__":
 			print(edge)
 		else:
 			print("INCOMPLETE EDGE", edge)
+
 
 	
 

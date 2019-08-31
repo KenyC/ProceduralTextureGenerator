@@ -1,4 +1,4 @@
-from PIL import Image, ImageDraw
+8from PIL import Image, ImageDraw
 from PIL.ImageChops import lighter
 from functools import reduce
 #from cst import *
@@ -67,6 +67,7 @@ def voronoiRandom(size, sqNM, uniform = 5., thick = 1, seed = None):
 
 	points = np.stack((coordX, coordY), axis = -1).reshape((N * M, 2))
 
+	print("FREAKING NPTS", points.shape, N, M)
 
 	return voronoiFromPts(size, points, thick)
 
