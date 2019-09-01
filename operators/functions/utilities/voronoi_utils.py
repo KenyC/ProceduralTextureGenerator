@@ -24,6 +24,18 @@ class Cell:
 		self.pt = point
 		self.edges = edges
 
+	def overlap(self, size, center):
+		size = np.array(size)
+		center = np.array(center)
+
+		for edge in self.edges:
+			vertices = [edge.origin, edge.end] if edge.bounded else [edge.origin]
+			for pt in vertices:
+				translated = (pt - center)
+				if np.all(translated <= size) and np.all(translated >= 0):
+					return True
+		return False
+
 class VoronoiGraph(Voronoi):
 
 	def __init__(self, *args, **kwargs):
@@ -81,7 +93,7 @@ class VoronoiGraph(Voronoi):
 		
 		
 	def draw_img(self, size, thick = 1, center = None, mode = "RGB", display_points = False):
-		h, w = size
+		w, h = size
 
 		if center is None:
 			center = (0., 0.)
@@ -91,80 +103,81 @@ class VoronoiGraph(Voronoi):
 		
 		for edge in self.edges:
 			if edge.bounded:
-				draw.line([tuple(edge.origin), tuple(edge.end)], width = thick, fill = (255, 255, 255))
+				draw.line([tuple(edge.origin - center), tuple(edge.end - center)], width = thick, fill = (255, 255, 255))
 			else:
-				draw.line([tuple(edge.origin), tuple(edge.origin + (h + w) * edge.direction)], width = thick, fill = (255, 255, 255))
+				draw.line([tuple(edge.origin - center), tuple(edge.origin - center + (h + w) * edge.direction)], width = thick, fill = (255, 255, 255))
 
-		radius = 3
+		radius = 3 
 
 		if display_points:
 			for pt in self.points:
-				top_left = tuple(pt - radius)
-				bot_right = tuple(pt + radius)
+				top_left = tuple(pt - radius - center)
+				bot_right = tuple(pt + radius - center)
 				draw.ellipse([top_left, bot_right], fill = (255, 0, 0))
 		
 		return img
 		
-def fill_img(self, size, center = None, mode = "RGB"):
-    h, w = size
 
-    if center is None:
-        center = np.array([0.,0.])
+	def fill_img(self, size, center = None, mode = "RGB"):
 
-    img = np.full((h, w), 1.)
+		cells = [cell for cell in self.cells if cell.overlap(size, center)]
 
-    # We create a coordinate array
-    # Shape: w
-    x = np.arange(w) + 0.5 - center[0]
-    # Shape: h
-    y = np.arange(h) + 0.5 - center[1]
-    # Shapes: (w, h)
-    xv, yv = np.meshgrid(x, y)
+		size_img = size
+		w, h = size_img
 
-    # coordinate array
-    # Shape: (w, h, 2)
-    coords = np.stack((xv, yv), axis = 2)
+		img = np.full(size_img, 0.)
 
-    # Constructing masks for every cell
+		for cell in cells:
+		    
+		    all_edges = np.stack([edge.origin for edge in cell.edges] + [edge.end for edge in cell.edges if edge.bounded])
 
-    for cell in self.cells:
+		    minPt = np.min(all_edges, axis = 0)
+		    maxPt = np.max(all_edges, axis = 0)
+		    
+		    cell.iMin = (minPt - center).astype("int")
+		    cell.iMax = (maxPt - center).astype("int")
+		    cell.size_img = cell.iMax - cell.iMin
+		    cell.img = np.full(cell.size_img, 1.)
+		    
+		    # We create a coordinate array
+		    # Shape: w
+		    x = np.arange(cell.size_img[0]) + 0.5 + minPt[0] 
+		    # Shape: h
+		    y = np.arange(cell.size_img[1]) + 0.5 + minPt[1] 
+		    # Shape: (w, h, 2)
+		    coords = np.stack(np.meshgrid(x, y, indexing = "ij"), axis = 2)
 
-        cell.mask = np.full_like(img, 1.)
-        cell.dists = []
+		    for edge in cell.edges:
 
-        for edge in cell.edges:
+		        # Determining origin and inward-pointing normal of edge
+		        edge.normal = rotation.dot(edge.direction)
+		        if np.dot(edge.normal, cell.pt - edge.origin)  < 0:
+		            normal = - edge.normal
+		        else:
+		            normal = edge.normal
+		        
+		        # Calculating distance to edge
+		        dist = np.dot(coords - edge.origin, normal) / np.linalg.norm(normal)
+		        
+		        # Multiplying positive value of plane
+		        cell.img *= dist * (dist >= 0).astype("float")
 
-            # Determining origin and inward-pointing normal of edge
-            edge.origin = np.array(edge.origin)
-            edge.normal = rotation.dot(edge.direction)
-            if np.dot(edge.normal, np.array(cell.pt) - edge.origin)  < 0:
-                normal = - edge.normal
-            else:
-                normal = edge.normal
+		    cell.img /= np.max(cell.img)
 
-            # Multiplying positive value of plane
-            dist = np.dot(coords - edge.origin, normal) / np.linalg.norm(normal)
-            cell.dists.append(dist)
+		# Multiplying distances
+		for cell in cells:
+		    iMin = np.maximum(cell.iMin, [0, 0]).astype("int")
+		    iMax = np.minimum(cell.iMax, size_img).astype("int")
 
-            mult = (dist >= 0).astype("float")
-            cell.mask *= mult
+		    cropping_left = iMin - cell.iMin
+		    cropping_right = cell.size_img - (cell.iMax - iMax)
+		    img[iMin[0]:iMax[0], iMin[1]:iMax[1]] += cell.img[cropping_left[0]:cropping_right[0],
+		    												cropping_left[1]:cropping_right[1]]
 
-    # Multiplying distances
-    for cell in self.cells:
-
-        for edge, dist in zip(cell.edges, cell.dists):
-            # Multiplying positive value of plane
-            img *= cell.mask * dist + (1 - cell.mask) 
-
-        # Cell-wise renormalization
-        maximum = np.max(cell.mask * img)
-        img /= cell.mask * maximum + (1 - cell.mask)
-
-    return img
-
+		return img
 
 if __name__ == "__main__":
-	N = 4
+	N = 20
 	size = height, width = 300 ,300
 	pts = np.stack((np.random.randint(0, 300, N), np.random.randint(0, 300, N)), axis = -1)
 

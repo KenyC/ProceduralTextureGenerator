@@ -1,17 +1,20 @@
-8from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw
 from PIL.ImageChops import lighter
 from functools import reduce
 #from cst import *
 #from utils import toImg
 import numpy as np
+from math import sqrt
+
 from utilities.voronoi_utils import VoronoiGraph
+from utilities.pt_dist import triangular_range, jitter
 
 
 
 
 
 
-def voronoiFromPts(size, points, thick = 1.):
+def voronoiFromPts(size, points, thick = 1., fill = False):
 	width, height = size
 
 	# Create 9 copies of each points for tiling
@@ -23,8 +26,10 @@ def voronoiFromPts(size, points, thick = 1.):
 	points = points + np.random.normal(scale = 1/100., size = points.shape)
 
 	voronoi = VoronoiGraph(points.tolist())
-
-	return voronoi.draw_img(size, center = (width, height), thick = thick)
+	if not fill:
+		return voronoi.draw_img(size, center = (width, height), thick = thick)
+	else:
+		return voronoi.fill_img((width, height), center = (width, height))
 
 def voronoiPureRandom(size, N, thick = 1., seed = None):
 	width, height = size
@@ -71,6 +76,19 @@ def voronoiRandom(size, sqNM, uniform = 5., thick = 1, seed = None):
 
 	return voronoiFromPts(size, points, thick)
 
+# scale is proportional to shortest neighbour ;
+# 0.1 to 0.2 seems to be the esthetically pleasing range
+def voronoiTriangular(width, n_x, scale, thick = 1, fill = False):
+	step_x = width / n_x
+	step_y = step_x * sqrt(3)/2
+
+	height = int(2 * step_y * (width // (2 * step_y)))
+	n_y = int(height // step_y) + 1
+
+	pts = triangular_range(n_x, n_y, step_x)
+	pts = jitter(pts, scale * step_x)
+
+	return voronoiFromPts((width, height), pts, thick, fill)
 
 
 
